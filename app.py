@@ -179,7 +179,8 @@ def get_trend_snapshots(limit=200):
         ).fetchone():
             return []
         rows = conn.execute(
-            """SELECT keyword, source, score, phase, velocity, breakout, recorded_at
+            """SELECT keyword_display AS keyword, source_count AS sources,
+                      score, category, recorded_at
                FROM trend_snapshots
                ORDER BY recorded_at DESC LIMIT ?""",
             (limit,)
@@ -331,7 +332,6 @@ elif PAGE == "🔥 Trends":
             try:
                 df = pd.DataFrame(rows)
                 df["recorded_at"] = pd.to_datetime(df["recorded_at"]).dt.strftime("%m/%d %H:%M")
-                df["breakout"] = df["breakout"].apply(lambda x: "🔥" if x else "")
                 st.dataframe(df, hide_index=True, use_container_width=True)
             except Exception as e:
                 show_error("Trend snapshot table", e)
