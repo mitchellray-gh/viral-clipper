@@ -1,0 +1,166 @@
+# ============================================================
+# Viral Clipper Pipeline - Settings
+# ============================================================
+
+pipeline:
+  run_hour: 6          # Hour of day (24h) to run auto-pipeline
+  clips_per_day: 10    # Target clips to generate per daily run
+  max_clip_length: 58  # Max Short length in seconds (YouTube <= 60s)
+  min_clip_length: 20  # Min clip length in seconds
+  short_resolution: [1080, 1920]  # Width x Height (9:16 vertical)
+  schedule_timezone: "America/New_York"
+
+trends:
+  google_trends:
+    enabled: true
+    timeframe: "now 1-d"   # now 1-H, now 4-H, now 1-d, now 7-d
+    geo: ""                 # "" = worldwide, "US" = United States
+    categories: []          # empty = all categories
+  reddit:
+    enabled: true
+    subreddits:             # subreddits to monitor for rising posts
+      - "worldnews"
+      - "technology"
+      - "science"
+      - "entertainment"
+      - "sports"
+      - "gaming"
+      - "business"
+      - "funny"
+      - "videos"
+      - "Futurology"
+    post_limit: 25
+    min_score: 1000         # minimum upvotes to consider
+  rss:
+    enabled: true
+    feeds:
+      - name: "BBC News"
+        url: "http://feeds.bbci.co.uk/news/rss.xml"
+      - name: "Reuters"
+        url: "https://feeds.reuters.com/reuters/topNews"
+      - name: "TechCrunch"
+        url: "https://techcrunch.com/feed/"
+      - name: "The Verge"
+        url: "https://www.theverge.com/rss/index.xml"
+      - name: "Hacker News Best"
+        url: "https://hnrss.org/best"
+      - name: "ESPN"
+        url: "https://www.espn.com/espn/rss/news"
+      - name: "Variety"
+        url: "https://variety.com/feed/"
+      - name: "IGN"
+        url: "http://feeds.ign.com/ign/all"
+  youtube_trending:
+    enabled: true
+    region_code: "US"
+    category_ids:           # YouTube category IDs to monitor
+      - "0"   # All
+      - "17"  # Sports
+      - "20"  # Gaming
+      - "24"  # Entertainment
+      - "25"  # News
+      - "28"  # Science & Technology
+    max_results: 50
+  hackernews:
+    enabled: true
+    fetch_top: 30           # top N stories from HN
+
+discovery:
+  max_videos_per_niche: 5   # YouTube videos to find per trending niche
+  min_video_views: 50000    # minimum views on source video
+  min_video_duration: 120   # minimum duration (seconds) - need enough to clip
+  max_video_duration: 7200  # max duration (2 hours)
+  video_age_days: 30        # only source videos published in last N days
+  preferred_languages: ["en"]
+  exclude_channels: []       # add channel IDs to block
+
+downloader:
+  output_dir: "data/downloads"
+  format: "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+  max_filesize_mb: 500
+  concurrent_downloads: 2
+  cookies_file: null         # path to cookies.txt for age-restricted content
+
+transcription:
+  model: "base.en"           # tiny.en / base.en / small.en / medium.en / large-v3
+  device: "auto"             # auto / cpu / cuda
+  compute_type: "int8"       # int8 / float16 / float32
+  language: "en"
+  word_timestamps: true
+  vad_filter: true           # Voice Activity Detection to skip silence
+
+clipper:
+  gemini_model: "gemini-1.5-flash"
+  virality_threshold: 0.65   # 0.0-1.0 — clips below this score are skipped
+  clips_per_video: 3         # max clips per source video
+  score_weights:
+    hook_strength: 0.30      # starts with strong hook / statement
+    emotional_peak: 0.25     # emotional intensity (surprise, laugh, shock)
+    information_density: 0.20 # surprising facts, statistics, revelations
+    completeness: 0.15       # makes sense as standalone short
+    trending_relevance: 0.10 # matches current trend topic
+
+editor:
+  captions:
+    enabled: true
+    font: "assets/fonts/Montserrat-Bold.ttf"
+    font_size: 52
+    color: "white"
+    stroke_color: "black"
+    stroke_width: 3
+    words_per_line: 4        # how many words per caption line
+    position: "center"       # top / center / bottom
+    highlight_active_word: true
+    highlight_color: "#FFD700"  # Gold color for word-level highlighting
+  background:
+    blur_sides: true         # blur pillarbox sides for vertical format
+    blur_strength: 25
+  branding:
+    watermark_text: null     # e.g. "@YourHandle" — set to null to disable
+    watermark_position: "top_right"
+    watermark_opacity: 0.7
+  music:
+    enabled: false           # Set true and add royalty-free MP3s to assets/music/
+    volume: 0.15             # music volume (0.0 - 1.0)
+    fade_in: 1.0
+    fade_out: 2.0
+  transitions:
+    zoom_punch: true         # subtle zoom on emphasis words
+    zoom_factor: 1.05
+
+metadata:
+  gemini_model: "gemini-1.5-flash"
+  max_title_length: 100
+  max_description_length: 500
+  hashtag_count: 10          # hashtags to include
+  default_category: "22"    # YouTube category ID (22 = People & Blogs)
+  languages: ["en"]
+  default_tags:
+    - "shorts"
+    - "viral"
+    - "trending"
+
+queue:
+  db_path: "data/queue.db"
+  max_backlog: 500           # max clips to keep in backlog
+  posts_per_day: 3           # how many Shorts to schedule for upload per day
+  posting_times:             # UTC hours to post each day
+    - 14   # 9 AM EST
+    - 18   # 1 PM EST
+    - 23   # 6 PM EST
+
+publisher:
+  output_dir: "data/shorts"
+  privacy_status: "public"   # public / private / unlisted
+  notify_subscribers: true
+  made_for_kids: false
+  embeddable: true
+  license: "youtube"
+  auto_levels: false
+  stabilize: false
+
+logging:
+  level: "INFO"
+  file: "logs/pipeline.log"
+  max_bytes: 10485760        # 10MB
+  backup_count: 5

@@ -1,0 +1,32 @@
+# ── Core pipeline ────────────────────────────────────────────────────────────
+yt-dlp>=2024.3.10
+faster-whisper>=1.0.0
+pytrends>=4.9.2
+praw>=7.7.1
+feedparser>=6.0.11
+
+# ── Google AI + YouTube API ──────────────────────────────────────────────────
+google-generativeai>=0.5.0
+google-api-python-client>=2.123.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# ── Video processing ─────────────────────────────────────────────────────────
+# Note: ffmpeg must be installed separately (not a pip package)
+# Windows: winget install ffmpeg   OR   choco install ffmpeg
+# The Python lib below just wraps it
+ffmpeg-python>=0.2.0
+
+# ── Config & scheduling ──────────────────────────────────────────────────────
+pyyaml>=6.0.1
+python-dotenv>=1.0.1
+apscheduler>=3.10.4
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+requests>=2.31.0
+Pillow>=10.3.0
+tqdm>=4.66.2
+
+# ── Optional: GPU acceleration for faster-whisper (install separately) ───────
+# pip install torch --index-url https://download.pytorch.org/whl/cu118
+# (only needed if you have NVIDIA GPU — otherwise CPU mode works fine)
