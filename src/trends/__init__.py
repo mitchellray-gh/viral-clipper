@@ -13,6 +13,7 @@ from .reddit_trends import RedditTrendsFetcher
 from .rss_trends import RssTrendsFetcher
 from .youtube_trending import YouTubeTrendingFetcher
 from .hackernews import HackerNewsFetcher
+from .momentum import TrendMomentumTracker
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,15 @@ class TrendingTopic:
     url: str = ""
     timestamp: datetime = field(default_factory=datetime.utcnow)
     metadata: dict = field(default_factory=dict)
+    # Populated after momentum analysis
+    momentum_score: float = 0.0     # composite score including velocity
+    velocity: float = 0.0           # score/hour (positive = rising fast)
+    phase: str = "new"              # new / rising / peak / declining / dead
+    breakout: bool = False          # high-confidence early breakout signal
 
     def __str__(self):
-        return f"[{self.source}] {self.keyword} (score={self.score:.2f})"
+        phase_tag = f" [{self.phase}" + (" 🔥" if self.breakout else "") + "]"
+        return f"[{self.source}] {self.keyword} (score={self.score:.2f}, vel={self.velocity:+.3f}){phase_tag}"
 
 
 class TrendAggregator:
@@ -43,6 +50,8 @@ class TrendAggregator:
         self.config = config
         self.fetchers = []
         self._init_fetchers()
+        db_path = config.get("queue", {}).get("db_path", "data/queue.db")
+        self.momentum = TrendMomentumTracker(db_path=db_path)
 
     def _init_fetchers(self):
         cfg = self.config.get("trends", {})
@@ -58,7 +67,7 @@ class TrendAggregator:
             self.fetchers.append(HackerNewsFetcher(cfg.get("hackernews", {})))
 
     def fetch_all(self) -> list[TrendingTopic]:
-        """Fetch from all sources, merge, deduplicate, and rank."""
+        """Fetch from all sources, merge, deduplicate, rank by momentum."""
         all_topics: list[TrendingTopic] = []
 
         for fetcher in self.fetchers:
@@ -70,9 +79,49 @@ class TrendAggregator:
                 logger.warning(f"{fetcher.__class__.__name__} failed: {e}")
 
         merged = self._merge_and_deduplicate(all_topics)
-        ranked = sorted(merged, key=lambda t: t.score, reverse=True)
-        logger.info(f"Total unique trending topics after merge: {len(ranked)}")
-        return ranked
+
+        # Persist snapshots for velocity tracking
+        try:
+            self.momentum.record_snapshots(merged)
+        except Exception as e:
+            logger.warning(f"Momentum snapshot failed: {e}")
+
+        # Compute momentum signals and enrich each topic
+        try:
+            signals = self.momentum.compute_momentum(merged)
+            for topic in merged:
+                import re
+                kw_norm = re.sub(r"[^a-z0-9 ]", "", topic.keyword.lower().strip())[:120]
+                sig = signals.get(kw_norm)
+                if sig:
+                    topic.momentum_score = sig.momentum_score
+                    topic.velocity = sig.velocity
+                    topic.phase = sig.phase
+                    topic.breakout = sig.breakout
+                else:
+                    topic.momentum_score = topic.score
+        except Exception as e:
+            logger.warning(f"Momentum computation failed: {e}")
+            for topic in merged:
+                topic.momentum_score = topic.score
+
+        # Rank by momentum_score, not raw score — rewards rising topics
+        ranked = sorted(merged, key=lambda t: t.momentum_score, reverse=True)
+
+        # Log breakout signals prominently
+        breakouts = [t for t in ranked if t.breakout]
+        if breakouts:
+            logger.info(f"🔥 {len(breakouts)} BREAKOUT topics detected: "
+                        + ", ".join(t.keyword[:40] for t in breakouts[:5]))
+
+        # Filter out declining/dead topics (they've already peaked)
+        alive = [t for t in ranked if t.phase not in ("declining", "dead")]
+        declined = len(ranked) - len(alive)
+        if declined:
+            logger.info(f"Filtered {declined} declining/dead topics from pipeline")
+
+        logger.info(f"Total viable trending topics: {len(alive)}")
+        return alive
 
     def _merge_and_deduplicate(self, topics: list[TrendingTopic]) -> list[TrendingTopic]:
         """
@@ -109,11 +158,34 @@ class TrendAggregator:
         for key, bucket in buckets.items():
             # Use the representative topic (highest raw score)
             primary = max(bucket, key=lambda t: t.raw_score)
-            # Boost score per additional source (up to +0.3)
-            source_boost = min(0.3, (len(bucket) - 1) * 0.1)
-            primary.score = min(1.0, primary.score + source_boost)
+            sources = list({t.source for t in bucket})
+
+            # Escape velocity: when a topic crosses from social chatter (fast sources)
+            # into mainstream news (slow sources), it's hitting viral escape velocity.
+            fast_sources = {"google_trends", "google_trends_rising", "hackernews"}
+            slow_sources = {s for s in sources if s.startswith("reddit") or s.startswith("rss")}
+            yt_source = {s for s in sources if s == "youtube_trending"}
+
+            has_fast = any(s in fast_sources for s in sources)
+            has_slow = bool(slow_sources)
+            has_yt = bool(yt_source)
+
+            # Base boost per additional source
+            source_boost = min(0.20, (len(bucket) - 1) * 0.07)
+
+            # Escape velocity multiplier: fast + slow crossover = strong signal
+            escape_boost = 0.0
+            if has_fast and has_slow:
+                escape_boost += 0.15  # social chatter → mainstream press crossover
+            if has_yt and (has_fast or has_slow):
+                escape_boost += 0.10  # YouTube trending + other = already viral
+            if len(sources) >= 4:
+                escape_boost += 0.10  # omnipresent topic
+
+            primary.score = min(1.0, primary.score + source_boost + escape_boost)
             primary.metadata["source_count"] = len(bucket)
-            primary.metadata["sources"] = list({t.source for t in bucket})
+            primary.metadata["sources"] = sources
+            primary.metadata["escape_velocity"] = escape_boost > 0.10
             merged.append(primary)
 
         return merged

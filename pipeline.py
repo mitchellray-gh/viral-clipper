@@ -83,6 +83,7 @@ class ViralClipperPipeline:
         from src.metadata import MetadataGenerator
         from src.queue import ContentQueue
         from src.publisher import YouTubePublisher
+        from src.publisher.analytics import AnalyticsFeedbackCollector
 
         self.trends = TrendAggregator(self.config)
         self.discovery = ContentDiscovery(self.config)
@@ -93,6 +94,7 @@ class ViralClipperPipeline:
         self.metadata_gen = MetadataGenerator(self.config)
         self.queue = ContentQueue(self.config)
         self.publisher = YouTubePublisher(self.config)
+        self.analytics = AnalyticsFeedbackCollector(self.config, self.trends.momentum)
 
     # ── Stage 1+2: Discover new content from trends ──────────────────────────
 
@@ -107,7 +109,11 @@ class ViralClipperPipeline:
             logger.warning("No trending topics found — skipping discovery")
             return []
 
+        # Highlight breakout topics for operator visibility
+        breakouts = [t for t in trends if getattr(t, "breakout", False)]
         logger.info(f"Top 5 trends: {[t.keyword for t in trends[:5]]}")
+        if breakouts:
+            logger.info(f"🔥 BREAKOUT signals: {[t.keyword for t in breakouts[:3]]}")
 
         videos = self.discovery.discover_for_trends(trends, max_topics=max_topics)
         logger.info(f"Discovered {len(videos)} source videos")
@@ -157,7 +163,9 @@ class ViralClipperPipeline:
         # ── Score virality ────────────────────────────────────────────────────
         logger.info(f"  ↳ Scoring clips with Gemini...")
         clip_candidates = self.scorer.find_clips(
-            transcript, vid_id, video.url, video.trend_keyword
+            transcript, vid_id, video.url, video.trend_keyword,
+            video_path=download.file_path,
+            source_metadata=video.metadata
         )
         if not clip_candidates:
             logger.info(f"  ✗ No clips above virality threshold for {vid_id}")
@@ -267,6 +275,20 @@ class ViralClipperPipeline:
                 if "quota" in result.error.lower():
                     logger.warning("  ⚠ Quota exceeded — saved locally only")
                     break
+
+        # Collect YouTube Analytics for recently published clips and feed back
+        # performance data to the momentum/niche tracker
+        try:
+            logger.info("  ↳ Collecting analytics feedback...")
+            perfs = self.analytics.collect_recent_performance(days_back=7)
+            if perfs:
+                top = sorted(perfs, key=lambda p: p.virality_score, reverse=True)[:3]
+                logger.info(f"  ✓ Analytics: top clips = {[p.niche for p in top]}")
+                recs = self.analytics.recommend_best_niches(top_n=5)
+                if recs:
+                    logger.info(f"  💹 Best-performing niches: {recs}")
+        except Exception as e:
+            logger.warning(f"  Analytics collection failed (non-fatal): {e}")
 
     # ── Full pipeline run ─────────────────────────────────────────────────────
 

@@ -176,8 +176,10 @@ class ContentDiscovery:
         if view_count > 0:
             engagement = min(1.0, (like_count + comment_count * 2) / view_count * 100)
 
-        # View velocity: views relative to channel average (approximated by view count)
-        view_norm = min(1.0, view_count / 5_000_000)
+        # View velocity: views per day since publish (rewards fast-rising videos)
+        # A video with 200k views in 1 day outscores a video with 2M views over 60 days
+        views_per_day = view_count / max(1, age_days)
+        view_velocity = min(1.0, views_per_day / 500_000)
 
         # Trend alignment — boost if trend keyword in title
         title = snippet.get("title", "")
@@ -188,14 +190,15 @@ class ContentDiscovery:
 
         # Combined discovery score
         discovery_score = (
-            view_norm * 0.35
+            view_velocity * 0.35
             + engagement * 0.25
             + freshness * 0.25
             + relevance * 0.15
         )
 
-        # Boost from trend score
-        discovery_score = min(1.0, discovery_score + trend.score * 0.1)
+        # Boost from trend momentum score (uses momentum_score if available, else score)
+        trend_boost = getattr(trend, "momentum_score", trend.score)
+        discovery_score = min(1.0, discovery_score + trend_boost * 0.1)
 
         return DiscoveredVideo(
             video_id=video_id,
@@ -215,6 +218,11 @@ class ContentDiscovery:
             metadata={
                 "category_id": snippet.get("categoryId", ""),
                 "live_content": content.get("licensedContent", False),
-                "age_days": age_days
+                "age_days": age_days,
+                "views_per_day": views_per_day,
+                "view_velocity": view_velocity,
+                "trend_velocity": getattr(trend, "velocity", 0.0),
+                "trend_phase": getattr(trend, "phase", "new"),
+                "breakout_topic": getattr(trend, "breakout", False),
             }
         )
