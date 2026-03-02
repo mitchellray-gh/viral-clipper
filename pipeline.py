@@ -198,7 +198,7 @@ class ViralClipperPipeline:
                     continue
 
                 # ── Generate metadata ──────────────────────────────────────
-                logger.info(f"  ↳ Generating metadata with Gemini...")
+                logger.info(f"  ↳ Generating metadata...")
                 meta = self.metadata_gen.generate(clip_candidate, download.title)
 
                 # ── Add to queue ───────────────────────────────────────────

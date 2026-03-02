@@ -610,6 +610,49 @@ elif PAGE == "⚙️ Settings":
             for svc, (icon, msg) in results.items():
                 st.markdown(f"{icon} **{svc}**: {msg}")
 
+        # ── YouTube OAuth2 setup ──────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("YouTube OAuth2 (Publishing)")
+
+        token_path = ROOT / os.environ.get("YOUTUBE_TOKEN_FILE", "config/youtube_token.json")
+        secrets_path = ROOT / os.environ.get("YOUTUBE_CLIENT_SECRETS_FILE", "config/client_secrets.json")
+
+        col_a, col_b = st.columns(2)
+        col_a.metric("client_secrets.json", "✅ Found" if secrets_path.exists() else "❌ Missing")
+        col_b.metric("youtube_token.json",  "✅ Found" if token_path.exists()   else "❌ Missing")
+
+        if not secrets_path.exists():
+            st.info(
+                "**To enable auto-publishing:**\n\n"
+                "1. Go to [console.cloud.google.com/apis/credentials]"
+                "(https://console.cloud.google.com/apis/credentials)\n"
+                "2. **+ Create Credentials → OAuth client ID → Desktop app**\n"
+                "3. Download the JSON and save it as `config/client_secrets.json`\n"
+                "4. Then click **Run Auth Setup** below"
+            )
+        elif not token_path.exists():
+            st.warning("client_secrets.json found but not yet authorized. Click **Run Auth Setup** to open the browser consent screen.")
+        else:
+            st.success("Publishing credentials are configured. The pipeline can upload automatically.")
+
+        if st.button("🔐 Run Auth Setup (opens browser)", disabled=not secrets_path.exists()):
+            with st.spinner("Running setup_auth.py — check your browser for the consent screen..."):
+                try:
+                    import subprocess
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "setup_auth.py")],
+                        capture_output=True, text=True, cwd=str(ROOT), timeout=120
+                    )
+                    output = (result.stdout + result.stderr).strip()
+                    if result.returncode == 0 and token_path.exists():
+                        st.success("OAuth2 setup complete! Publishing is now enabled.")
+                    else:
+                        st.error("Setup did not complete. See output below.")
+                    if output:
+                        st.code(output)
+                except Exception as e:
+                    show_error("Auth setup", e)
+
     with tab_cfg:
         st.caption("Current `config/settings.yaml` (read-only preview)")
         cfg_path = ROOT / "config" / "settings.yaml"

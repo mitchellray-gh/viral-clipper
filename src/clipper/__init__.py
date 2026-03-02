@@ -83,7 +83,7 @@ class ViralityScorer:
         if video_path:
             try:
                 audio_profile = analyze_audio_energy(video_path)
-                peak_count = len(audio_profile.peaks)
+                peak_count = len(audio_profile.peak_moments)
                 logger.info(f"Audio energy analyzed: {peak_count} peaks found")
             except Exception as e:
                 logger.warning(f"Audio energy analysis failed: {e}")
