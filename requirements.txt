@@ -26,6 +26,11 @@ apscheduler>=3.10.4
 requests>=2.31.0
 Pillow>=10.3.0
 tqdm>=4.66.2
+pandas>=2.0.0
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+streamlit>=1.35.0
+google-genai>=0.8.0
 
 # ── Optional: GPU acceleration for faster-whisper (install separately) ───────
 # pip install torch --index-url https://download.pytorch.org/whl/cu118
