@@ -17,7 +17,7 @@ trends:
     geo: ""                 # "" = worldwide, "US" = United States
     categories: []          # empty = all categories
   reddit:
-    enabled: true
+    enabled: false
     subreddits:             # subreddits to monitor for rising posts
       - "worldnews"
       - "technology"

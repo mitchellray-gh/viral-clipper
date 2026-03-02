@@ -36,22 +36,32 @@ class GoogleTrendsFetcher:
         try:
             pytrends = TrendReq(hl="en-US", tz=360, timeout=(10, 25), retries=2, backoff_factor=0.5)
 
-            # Real-time trending searches
-            trending_df = pytrends.trending_searches(pn="united_states")
-            for i, keyword in enumerate(trending_df[0].tolist()[:30]):
-                score = 1.0 - (i / 30)  # rank-based score
-                topics.append(TrendingTopic(
-                    keyword=keyword,
-                    source="google_trends",
-                    score=score,
-                    raw_score=30 - i,
-                    category="trending",
-                    description=f"Google Trends real-time rank #{i+1}"
-                ))
+            # Real-time trending searches (replaces deprecated trending_searches)
+            try:
+                rt_df = pytrends.realtime_trending_searches(pn="US")
+                # Columns vary by pytrends version; grab first text-like column
+                title_col = "title" if "title" in rt_df.columns else rt_df.columns[0]
+                keywords = rt_df[title_col].dropna().tolist()[:30]
+                for i, keyword in enumerate(keywords):
+                    keyword = str(keyword).strip()
+                    if not keyword:
+                        continue
+                    score = 1.0 - (i / max(len(keywords), 1))
+                    topics.append(TrendingTopic(
+                        keyword=keyword,
+                        source="google_trends",
+                        score=score,
+                        raw_score=len(keywords) - i,
+                        category="trending",
+                        description=f"Google Trends real-time rank #{i+1}"
+                    ))
+                logger.info(f"Google Trends: fetched {len(topics)} real-time topics")
+            except Exception as e:
+                logger.debug(f"realtime_trending_searches unavailable: {e}")
 
             time.sleep(1)  # be polite to API
 
-            # Today's interest for general categories
+            # Rising related queries for key seed terms
             try:
                 pytrends.build_payload(
                     ["viral", "trending", "breaking news"],
