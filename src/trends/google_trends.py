@@ -15,6 +15,19 @@ class GoogleTrendsFetcher:
         self.categories = config.get("categories", [])
 
     def fetch(self):
+        # urllib3 v2 renamed method_whitelist -> allowed_methods; patch for pytrends compat
+        try:
+            import urllib3.util.retry as _retry
+            if not hasattr(_retry.Retry, '_patched_for_pytrends'):
+                _orig = _retry.Retry.__init__
+                def _patched(self, *a, **kw):
+                    if 'method_whitelist' in kw:
+                        kw['allowed_methods'] = kw.pop('method_whitelist')
+                    _orig(self, *a, **kw)
+                _retry.Retry.__init__ = _patched
+                _retry.Retry._patched_for_pytrends = True
+        except Exception:
+            pass
         from pytrends.request import TrendReq
         from pytrends.exceptions import ResponseError
         from src.trends import TrendingTopic

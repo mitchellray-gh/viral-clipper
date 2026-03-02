@@ -372,7 +372,8 @@ class ViralClipperPipeline:
 # ── CLI Entry Point ───────────────────────────────────────────────────────────
 
 def main():
-    load_dotenv("config/.env")
+    load_dotenv()           # loads .env from cwd (C:\viral-clipper\.env)
+    load_dotenv("config/.env", override=False)  # also check config/.env as fallback
     config = load_config("config/settings.yaml")
     setup_logging(config)
 

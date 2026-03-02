@@ -90,7 +90,7 @@ transcription:
   vad_filter: true           # Voice Activity Detection to skip silence
 
 clipper:
-  gemini_model: "gemini-1.5-flash"
+  gemini_model: "gemini-2.0-flash"
   virality_threshold: 0.65   # 0.0-1.0 — clips below this score are skipped
   clips_per_video: 3         # max clips per source video
   score_weights:
@@ -129,7 +129,7 @@ editor:
     zoom_factor: 1.05
 
 metadata:
-  gemini_model: "gemini-1.5-flash"
+  gemini_model: "gemini-2.0-flash"
   max_title_length: 100
   max_description_length: 500
   hashtag_count: 10          # hashtags to include

@@ -42,17 +42,16 @@ class MetadataGenerator:
         self.hashtag_count = self.cfg.get("hashtag_count", 10)
         self.category_id = self.cfg.get("default_category", "22")
         self.default_tags = self.cfg.get("default_tags", ["shorts", "viral", "trending"])
-        self._model = None
+        self._gemini_client = None
 
-    def _get_model(self):
-        if self._model is None:
-            import google.generativeai as genai
+    def _get_client(self):
+        if self._gemini_client is None:
+            from google import genai
             api_key = os.environ.get("GOOGLE_API_KEY", "")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY not set")
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(self.model_name)
-        return self._model
+            self._gemini_client = genai.Client(api_key=api_key)
+        return self._gemini_client
 
     def generate(self, clip_candidate, source_title: str = "") -> ShortMetadata:
         """
@@ -66,7 +65,7 @@ class MetadataGenerator:
             return self._fallback_metadata(clip_candidate, source_title)
 
     def _generate_with_gemini(self, clip_candidate, source_title: str) -> ShortMetadata:
-        model = self._get_model()
+        client = self._get_client()
 
         prompt = f"""You are a viral YouTube Shorts content strategist. Generate compelling metadata for a YouTube Short.
 
@@ -95,7 +94,7 @@ Respond ONLY with valid JSON (no markdown):
 }}"""
 
         time.sleep(1)  # Gemini free tier rate limit
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=self.model_name, contents=prompt)
         text = response.text.strip()
 
         # Strip markdown fences

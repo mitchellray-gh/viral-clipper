@@ -56,17 +56,16 @@ class ViralityScorer:
         })
         self.min_clip = config.get("pipeline", {}).get("min_clip_length", 20)
         self.max_clip = config.get("pipeline", {}).get("max_clip_length", 58)
-        self._gemini_model = None
+        self._gemini_client = None
 
-    def _get_model(self):
-        if self._gemini_model is None:
-            import google.generativeai as genai
+    def _get_client(self):
+        if self._gemini_client is None:
+            from google import genai
             api_key = os.environ.get("GOOGLE_API_KEY", "")
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY environment variable not set")
-            genai.configure(api_key=api_key)
-            self._gemini_model = genai.GenerativeModel(self.model_name)
-        return self._gemini_model
+            self._gemini_client = genai.Client(api_key=api_key)
+        return self._gemini_client
 
     def find_clips(self, transcript, video_id: str, source_url: str,
                    trend_keyword: str = "", video_path: Optional[str] = None,
@@ -186,7 +185,7 @@ class ViralityScorer:
                      audio_profile: Optional[AudioEnergyProfile] = None,
                      source_metadata: Optional[dict] = None) -> list[ClipCandidate]:
         """Send a batch of windows to Gemini for scoring."""
-        model = self._get_model()
+        client = self._get_client()
         meta = source_metadata or {}
 
         # Build per-window audio energy scores
@@ -261,7 +260,7 @@ Respond with ONLY valid JSON array, no markdown:
   ...
 ]"""
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model=self.model_name, contents=prompt)
         text = response.text.strip()
 
         # Strip markdown code fences if present
