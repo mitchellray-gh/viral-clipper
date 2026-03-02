@@ -3,6 +3,7 @@ yt-dlp>=2024.3.10
 faster-whisper>=1.0.0
 pytrends>=4.9.2
 praw>=7.7.1
+groq>=0.11.0
 feedparser>=6.0.11
 
 # ── Google AI + YouTube API ──────────────────────────────────────────────────

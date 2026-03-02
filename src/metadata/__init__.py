@@ -1,6 +1,6 @@
 """
 Metadata Generator
-Uses Google Gemini to generate viral titles, descriptions,
+Uses an LLM (Groq/Llama by default) to generate viral titles, descriptions,
 tags, and hashtags for each YouTube Short.
 """
 
@@ -36,22 +36,22 @@ class ShortMetadata:
 class MetadataGenerator:
     def __init__(self, config: dict):
         self.cfg = config.get("metadata", {})
-        self.model_name = self.cfg.get("gemini_model", "gemini-1.5-flash")
+        self.model_name = self.cfg.get("llm_model", "llama-3.3-70b-versatile")
         self.max_title = self.cfg.get("max_title_length", 100)
         self.max_desc = self.cfg.get("max_description_length", 500)
         self.hashtag_count = self.cfg.get("hashtag_count", 10)
         self.category_id = self.cfg.get("default_category", "22")
         self.default_tags = self.cfg.get("default_tags", ["shorts", "viral", "trending"])
-        self._gemini_client = None
+        self._llm_client = None
 
     def _get_client(self):
-        if self._gemini_client is None:
-            from google import genai
-            api_key = os.environ.get("GOOGLE_API_KEY", "")
+        if self._llm_client is None:
+            from groq import Groq
+            api_key = os.environ.get("GROQ_API_KEY", "")
             if not api_key:
-                raise ValueError("GOOGLE_API_KEY not set")
-            self._gemini_client = genai.Client(api_key=api_key)
-        return self._gemini_client
+                raise ValueError("GROQ_API_KEY not set")
+            self._llm_client = Groq(api_key=api_key)
+        return self._llm_client
 
     def generate(self, clip_candidate, source_title: str = "") -> ShortMetadata:
         """
@@ -59,12 +59,12 @@ class MetadataGenerator:
         Falls back to rule-based generation if API call fails.
         """
         try:
-            return self._generate_with_gemini(clip_candidate, source_title)
+            return self._generate_with_llm(clip_candidate, source_title)
         except Exception as e:
-            logger.warning(f"Gemini metadata generation failed: {e} — using fallback")
+            logger.warning(f"LLM metadata generation failed: {e} — using fallback")
             return self._fallback_metadata(clip_candidate, source_title)
 
-    def _generate_with_gemini(self, clip_candidate, source_title: str) -> ShortMetadata:
+    def _generate_with_llm(self, clip_candidate, source_title: str) -> ShortMetadata:
         client = self._get_client()
 
         prompt = f"""You are a viral YouTube Shorts content strategist. Generate compelling metadata for a YouTube Short.
@@ -93,9 +93,12 @@ Respond ONLY with valid JSON (no markdown):
   "hashtags": ["Shorts", "Viral", ...]
 }}"""
 
-        time.sleep(1)  # Gemini free tier rate limit
-        response = client.models.generate_content(model=self.model_name, contents=prompt)
-        text = response.text.strip()
+        response = client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+        )
+        text = response.choices[0].message.content.strip()
 
         # Strip markdown fences
         if text.startswith("```"):

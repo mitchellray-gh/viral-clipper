@@ -1,6 +1,6 @@
 """
 Virality Clip Scorer
-Uses Google Gemini to analyze transcript windows and score them
+Uses an LLM (Groq/Llama by default) to analyze transcript windows and score them
 for virality potential, finding the best moments to clip.
 """
 
@@ -44,7 +44,7 @@ class ClipCandidate:
 class ViralityScorer:
     def __init__(self, config: dict):
         self.cfg = config.get("clipper", {})
-        self.model_name = self.cfg.get("gemini_model", "gemini-1.5-flash")
+        self.model_name = self.cfg.get("llm_model", "llama-3.3-70b-versatile")
         self.threshold = self.cfg.get("virality_threshold", 0.65)
         self.clips_per_video = self.cfg.get("clips_per_video", 3)
         self.weights = self.cfg.get("score_weights", {
@@ -56,16 +56,16 @@ class ViralityScorer:
         })
         self.min_clip = config.get("pipeline", {}).get("min_clip_length", 20)
         self.max_clip = config.get("pipeline", {}).get("max_clip_length", 58)
-        self._gemini_client = None
+        self._llm_client = None
 
     def _get_client(self):
-        if self._gemini_client is None:
-            from google import genai
-            api_key = os.environ.get("GOOGLE_API_KEY", "")
+        if self._llm_client is None:
+            from groq import Groq
+            api_key = os.environ.get("GROQ_API_KEY", "")
             if not api_key:
-                raise ValueError("GOOGLE_API_KEY environment variable not set")
-            self._gemini_client = genai.Client(api_key=api_key)
-        return self._gemini_client
+                raise ValueError("GROQ_API_KEY environment variable not set")
+            self._llm_client = Groq(api_key=api_key)
+        return self._llm_client
 
     def find_clips(self, transcript, video_id: str, source_url: str,
                    trend_keyword: str = "", video_path: Optional[str] = None,
@@ -104,7 +104,7 @@ class ViralityScorer:
                                            audio_profile=audio_profile,
                                            source_metadata=source_metadata or {})
                 candidates.extend(scored)
-                time.sleep(1.5)  # Gemini free tier: 15 RPM
+                time.sleep(0.5)  # small pause between batches
             except Exception as e:
                 logger.warning(f"Batch scoring failed at index {i}: {e}")
                 time.sleep(5)
@@ -260,8 +260,12 @@ Respond with ONLY valid JSON array, no markdown:
   ...
 ]"""
 
-        response = client.models.generate_content(model=self.model_name, contents=prompt)
-        text = response.text.strip()
+        response = client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        text = response.choices[0].message.content.strip()
 
         # Strip markdown code fences if present
         if text.startswith("```"):
